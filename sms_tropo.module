@@ -18,6 +18,7 @@ function sms_tropo_gateway_info() {
       'configure form' => 'sms_tropo_admin_form',
       'send' => 'sms_tropo_send',
       'send form' => 'sms_tropo_send_form',
+      'other form' => 'sms_tropo_other_form',
     ),
   );
 }
@@ -72,7 +73,7 @@ function sms_tropo_admin_form($configuration) {
 
   $form['sms_tropo_enabled_networks'] = array(
     '#type' => 'select',
-    '#title' => t('Enabled Networks'),
+    '#title' => t('Enabled Networks (Message Types)'),
     '#description' => t('These (the ones you select) are the protocols from which your users will be able to send messages with.<br />Tropo supports all these protocols but you need to set them up with your Tropo app before they will work.<br />SMS is automatically enabled once you add a phone number to your Tropo app.'),
     '#multiple' => TRUE,
     '#options' => sms_tropo_networks(),
@@ -108,10 +109,21 @@ function sms_tropo_send_form() {
   return $form;
 }
 
+function sms_tropo_other_form($account) {
+	$available_networks = sms_tropo_networks();
+  $form['network'] = array(
+    '#type' => 'item',
+    '#title' => t('Message Type'),
+    '#value' => $available_networks[$account->sms_user[0]['gateway']['network']] // this gives the user-friendly name of the network.
+  );
+  return $form;
+}
+
 /**
  * Callback for sending messages.
  */
 function sms_tropo_send($number, $message, $options) {
+	watchdog('sms_tropo','sms_tropo_send options:  <br />'.print_r($options,TRUE));
 	$network = $options['network'];
   return sms_tropo_command('create', array('number' => $number, 'message' => $message, 'network' => $network));
 }
@@ -121,7 +133,7 @@ function sms_tropo_send($number, $message, $options) {
  */
 function sms_tropo_command($command = 'create', $data = array(), $config = NULL) {
   $gateway = sms_gateways('gateway', 'tropo');
-    
+  
   if ($config == NULL) {
     $config = $gateway['configuration'];
   }
