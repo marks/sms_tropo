@@ -55,37 +55,47 @@ One of the great advantages of the Tropo platform is that it makes it easy to se
 _However_, there are a two code changes (required, list below) and several views changes (optional, listed further below) that you might want to make if you plan to take advantage of Tropo's non-SMS networks.
 To be clear: You can use Tropo as just a SMS provider and not need to make any of the following changes. 
 
-1. **Code change to `/modules/messaging/messaging_sms/messaging_sms.module` (Line 44)**  
-	The function should be changed to read as follows:
+1. **Code changes to `/modules/messaging/messaging_sms/messaging_sms.module`**  
+	Find the following two functions and replace them with their new code:
 
-		/**
-		 * Map user account to SMS destination (phone number) __OR__ IM address. Hence the code 8 lines down.
-		 */
 		function messaging_sms_user_destination($account, $message) {
-		  // Check for active mobile infomation. Simply return it so that the send
-		  // callback has a destination array and access everything.
+		  // Check for active mobile information. Simply return it (number and gateway information)
+		  // so that the send callback has a destination array
+			$destination = array();
 		  if (!empty($account->sms_user) && $account->sms_user[0]['status'] == 2 && !empty($account->sms_user[0]['number'])) {
-				$destination = $account->sms_user[0]['number'];
-				// Check to see if a network is defined. If so, we need to keep track of that for sending a Tropo IM/phone call (non-SMS)
-				if (!empty($account->sms_user[0]['gateway']['network'])) {
-					$destination = $destination . '&network=' . $account->sms_user[0]['gateway']['network'];
+				$destination['number'] = $account->sms_user[0]['number'];
+				if(!empty($account->sms_user[0]['gateway'])){
+					$destination['gateway'] = $account->sms_user[0]['gateway'];
 				}
 				return $destination;
 		  }
 		}
 
-2. **Code change to `/modules/smsframework/modules/sms_user/sms_user.module` (Line 269)**:  
-	Change:  
+		function messaging_sms_send_msg($destination, $message, $params = array()) {
+		  $text = messaging_text_build($message, ' ');
+			// Following line modified to handle array that is now returned by destination callback
+		  return sms_send($destination['number'], $text, $destination['gateway']);
+		}
+		  
+2. **Codes change to `/modules/smsframework/modules/sms_user/sms_user.module` (~Line 269)**:  
 
-		'number'  => sms_formatter($number),
-			
-	to: 
-		
-		// No longer formatting $number into a 10-digit phone number since Tropo users may be using IM addresses with non-digit characters
-			'number' => $number
-
-3. **Non-functional changes (changes to wording of other modules' to make for a better user experience)**
+	* ~Line 269, change: `'number'  => sms_formatter($number),` --> `'number' => $number`  
+		(This is so the sms_user module will not reject screen names for IM services)  
+	* Add the following code to the line directly after the following function declarations
 	
+		* `function sms_user_settings_confirm_form(&$form_state, $account)`
+		* `function sms_user_settings_reset_form(&$form_state, $account)`
+			
+			
+				$gateway = sms_default_gateway();
+				  if (function_exists($gateway['other form'])) {
+				    $form['gateway']['#tree'] = TRUE;
+				    $form['gateway'] = array_merge($gateway['other form']($account), $form['gateway']);
+				}
+		  
+     
+3. **Non-functional changes (changes to wording of other modules' to make for a better user experience)**
+	  
 	Look through the following files for mentions of: 'SMS', 'phone', and 'number' and change them to 'message', 'device', and 'number/address'
 	* `/modules/smsframework/modules/sms_user/sms_user.module`
 	* `/modules/smsframework/modules/sms_actions/sms_actions.module`
